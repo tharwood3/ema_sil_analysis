@@ -23,7 +23,12 @@ simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
 CONTROLLED_VOCAB = ['InjBL', 'InjBl', 'blank', 'Blank', 'QC', 'ISTD']
 
-def _format_peak_heights(peak_heights):
+def _format_peak_heights(peak_heights: pd.DataFrame) -> pd.DataFrame:
+    """Reformate the peak heights table for further manipulation.
+    
+    The data is transpoed to be more compound-centric, rather than file-centric. 
+    Header is then reset to new compound columns.
+    """
     
     peak_heights = peak_heights.transpose().reset_index()
     header = peak_heights.iloc[0]
@@ -33,8 +38,9 @@ def _format_peak_heights(peak_heights):
     
     return peak_heights
 
-def read_peak_heights(project_directory, experiment, polarity, 
-                      workflow_name, rt_alignment_number, analysis_number):
+def read_peak_heights(project_directory: str, experiment: str, polarity: str, 
+                      workflow_name: str, rt_alignment_number: int, analysis_number: int) -> pd.DataFrame:
+    """Read peak heights csv file created from Metatlas Targeted workflow."""
     
     assert polarity == "positive" or polarity == "negative"
     
@@ -58,8 +64,9 @@ def read_peak_heights(project_directory, experiment, polarity,
     return peak_heights
 
 
-def read_compound_atlas(project_directory, experiment, polarity,
-                        workflow_name, rt_alignment_number, analysis_number):
+def read_compound_atlas(project_directory: str, experiment: str, polarity: str,
+                        workflow_name: str, rt_alignment_number: int, analysis_number: int) -> pd.DataFrame:
+    """Read compound atlas csv file created from Metatlas Targeted workflow"""
     
     assert polarity == "positive" or polarity == "negative"
     
@@ -79,23 +86,29 @@ def read_compound_atlas(project_directory, experiment, polarity,
     
     return compound_atlas
 
-def detect_noise(intensities, noise_ratio=0.75):
+def detect_noise(compound_intensities: np.ndarray[float, ...], expected_isotopic_ratio=0.01, max_percent_difference=100) -> list[int, ...]:
+    """Return indicies of intensity vector that differ from expected natural abundance patterns.
     
-    peak_idx = 0
-    i_ratios = intensities[:-1] / intensities[1:]
+    Noise is determined by comparing the actual intensity to the expected intensity given the natural abundance of the isotope.
+    The maximum percent difference allows for some signal variation.
+    """
+    
+    m0_i = compound_intensities[0]
     
     noise_idxs = []
-    for idx in range(i_ratios.size):
+    for c13_count, intensity in enumerate(compound_intensities):
+        isotopic_multiplier = expected_isotopic_ratio ** c13_count
+        expected_intensity = m0_i * isotopic_multiplier
         
-        if (i_ratios[idx] <= noise_ratio) & (idx+1 > peak_idx):
-            noise_idxs.append(idx+1)
+        if abs(expected_intensity - intensity) > (expected_intensity*max_percent_difference):
+            noise_idxs.append(c13_count)
         
     return noise_idxs
 
 
-def convert_name_to_metatlas(compound_name):
+def convert_name_to_metatlas(compound_name: str) -> str:
+    """Perform and series of regex string sanitation steps for paritiy with Metatlas output."""
     
-    # perform series of regex string sanitation steps for parity with metatlas output
     compound_name = compound_name.split('///')[0]
     compound_name = re.sub(r'\.', 'p', compound_name)  # 2 or more in regexp
     compound_name = re.sub(r'[\[\]]', '', compound_name)
@@ -109,20 +122,23 @@ def convert_name_to_metatlas(compound_name):
     
     return compound_name
 
-def make_intensity_vector(df_row):
+def make_intensity_vector(df_row: pd.core.series.Series) -> np.ndarray[float, ...]:
+    """Return an array of values given a row of a pandas DataFrame."""
     
     intensity_vector = [float(i) for i in df_row]
     intensity_vector = np.array(intensity_vector)
     
     return intensity_vector 
 
-def get_13c_intensity_sum(intensity_vector):
+def get_13c_intensity_sum(intensity_vector: np.ndarray[float, ...]) -> float:
+    """Get sum of intensity vector, excluding the unlabeled molecule."""
     
     intensity_sum_13c = intensity_vector[1:].sum()
     
     return intensity_sum_13c
 
-def filter_compound_columns(compound_name, compound_adduct, compound_columns):
+def filter_compound_columns(compound_name: str, compound_adduct: str, compound_columns: list[str, ...]) -> list[str, ...]:
+    """Filter DataFrame columns by compound name and adduct."""
     
     metatlas_compound_name = convert_name_to_metatlas(compound_name)
     
@@ -136,7 +152,9 @@ def filter_compound_columns(compound_name, compound_adduct, compound_columns):
         
     return compound_name_columns
 
-def get_13c_and_12c_vectors(peak_heights, compound_name, compound_adduct, compound_columns, short_groups_12c, short_groups_13c):
+def get_13c_and_12c_vectors(peak_heights: pd.DataFrame, compound_name: str, compound_adduct: str, 
+                            compound_columns: list[str, ...], short_groups_12c: list[str, ...], short_groups_13c: list[str, ...]) -> dict[str, tuple[str, np.ndarray[float, ...]]]:
+    """Get the intensity vectors for the top unlabeled and 13C labeled files with the highest 13C signal."""
     
     compound_name_columns = filter_compound_columns(compound_name, compound_adduct, compound_columns)
     
@@ -160,7 +178,8 @@ def get_13c_and_12c_vectors(peak_heights, compound_name, compound_adduct, compou
     
     return min_and_max_13c_entries
 
-def retrieve_file_paths(peak_heights, short_groups, experiment):
+def retrieve_file_paths(peak_heights: pd.DataFrame, short_groups: list[str, ...], experiment: str) -> list[str, ...]:
+    """Retrieve file paths that correspond with the sample short groups of interest."""
     
     all_file_paths = glob.glob(os.path.join("/global/cfs/cdirs/metatlas/raw_data/*/", experiment, "*.h5"))
     filtered_files = peak_heights[peak_heights['short groupname'].isin(short_groups)]['file'].tolist()
@@ -168,7 +187,8 @@ def retrieve_file_paths(peak_heights, short_groups, experiment):
     
     return filtered_file_paths
 
-def get_file_short_group(file_path):
+def get_file_short_group(file_path: str) -> str:
+    """Convert the file path back into the short group name."""
     
     file_basename = os.path.basename(file_path)
     
@@ -325,7 +345,7 @@ def export_noise_detection_plots(peak_heights, ms1_data, sample_files, short_gro
         
     return noise_detection_data
 
-def filter_peak_heights(peak_heights, compound_name, compound_adduct, output_path):
+def filter_compound_peak_heights(peak_heights, compound_name, compound_adduct, output_path):
     
     gui_selection_data_path = os.path.join(output_path, "gui_selection_data.csv")
     gui_selection_data = pd.read_csv(gui_selection_data_path)
@@ -349,6 +369,9 @@ def filter_peak_heights(peak_heights, compound_name, compound_adduct, output_pat
         return
             
     peak_heights.drop(columns=remove_cols, inplace=True)
+    
+def filter_all_peak_heights(peak_heights, compound_keys, output_path):
+    pass
 
 def generate_outputs(project_directory: str,
                      experiment: str,
