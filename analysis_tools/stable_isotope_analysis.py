@@ -97,6 +97,10 @@ def detect_noise(compound_intensities: np.ndarray[float, ...], expected_isotopic
     
     noise_idxs = []
     for c13_count, intensity in enumerate(compound_intensities):
+        if intensity > m0_i:
+            noise_idxs.append(c13_count)
+            continue
+        
         isotopic_multiplier = expected_isotopic_ratio ** c13_count
         expected_intensity = m0_i * isotopic_multiplier
         
@@ -130,12 +134,12 @@ def make_intensity_vector(df_row: pd.core.series.Series) -> np.ndarray[float, ..
     
     return intensity_vector 
 
-def get_13c_intensity_sum(intensity_vector: np.ndarray[float, ...]) -> float:
+def get_lab_intensity_sum(intensity_vector: np.ndarray[float, ...]) -> float:
     """Get sum of intensity vector, excluding the unlabeled molecule."""
     
-    intensity_sum_13c = intensity_vector[1:].sum()
+    intensity_sum_lab = intensity_vector[1:].sum()
     
-    return intensity_sum_13c
+    return intensity_sum_lab
 
 def filter_compound_columns(compound_name: str, compound_adduct: str, compound_columns: list[str, ...]) -> list[str, ...]:
     """Filter DataFrame columns by compound name and adduct."""
@@ -152,31 +156,31 @@ def filter_compound_columns(compound_name: str, compound_adduct: str, compound_c
         
     return compound_name_columns
 
-def get_13c_and_12c_vectors(peak_heights: pd.DataFrame, compound_name: str, compound_adduct: str, 
-                            compound_columns: list[str, ...], short_groups_12c: list[str, ...], short_groups_13c: list[str, ...]) -> dict[str, tuple[str, np.ndarray[float, ...]]]:
-    """Get the intensity vectors for the top unlabeled and 13C labeled files with the highest 13C signal."""
+def get_lab_and_unlab_vectors(peak_heights: pd.DataFrame, compound_name: str, compound_adduct: str, 
+                            compound_columns: list[str, ...], short_groups_unlab: list[str, ...], short_groups_lab: list[str, ...]) -> dict[str, tuple[str, np.ndarray[float, ...]]]:
+    """Get the intensity vectors for the top unlabeled and lab labeled files with the highest lab signal."""
     
     compound_name_columns = filter_compound_columns(compound_name, compound_adduct, compound_columns)
     
-    # sort values by M0 intensity so the lowest 13c intensity vector isn't empty
+    # sort values by M0 intensity so the lowest lab intensity vector isn't empty
     peak_heights.sort_values(compound_name_columns[0], ascending=False, inplace=True)
     
-    # make new column names for intensity vector and 13c intensity sum
+    # make new column names for intensity vector and lab intensity sum
     intensity_vector_col = "{}_intensity_vector".format(compound_name)
-    intensity_sum_13c_col = "{}_13c_intensity_sum".format(compound_name)
+    intensity_sum_lab_col = "{}_lab_intensity_sum".format(compound_name)
     
-    # calculate intensity vector from compound columns and 13C intensity sum
+    # calculate intensity vector from compound columns and lab intensity sum
     peak_heights[intensity_vector_col] = peak_heights[compound_name_columns].apply(make_intensity_vector, axis=1)
-    peak_heights[intensity_sum_13c_col] = peak_heights[intensity_vector_col].apply(get_13c_intensity_sum)
+    peak_heights[intensity_sum_lab_col] = peak_heights[intensity_vector_col].apply(get_lab_intensity_sum)
     
-    # get the intensity vectors of the highest and lowest 13C sum rows
-    highest_12c_entry = peak_heights[peak_heights['short groupname'].isin(short_groups_12c)].sort_values(intensity_sum_13c_col, ascending=False)[['short groupname', intensity_vector_col]].iloc[0]
-    highest_13c_entry = peak_heights[peak_heights['short groupname'].isin(short_groups_13c)].sort_values(intensity_sum_13c_col, ascending=False)[['short groupname', intensity_vector_col]].iloc[0]
+    # get the intensity vectors of the highest and lowest lab sum rows
+    highest_unlab_entry = peak_heights[peak_heights['short groupname'].isin(short_groups_unlab)].sort_values(intensity_sum_lab_col, ascending=False)[['short groupname', intensity_vector_col]].iloc[0]
+    highest_lab_entry = peak_heights[peak_heights['short groupname'].isin(short_groups_lab)].sort_values(intensity_sum_lab_col, ascending=False)[['short groupname', intensity_vector_col]].iloc[0]
 
-    min_and_max_13c_entries = {'13c':(highest_13c_entry['short groupname'], highest_13c_entry[intensity_vector_col]),
-                               '12c':(highest_12c_entry['short groupname'], highest_12c_entry[intensity_vector_col])} 
+    min_and_max_lab_entries = {'lab':(highest_lab_entry['short groupname'], highest_lab_entry[intensity_vector_col]),
+                               'unlab':(highest_unlab_entry['short groupname'], highest_unlab_entry[intensity_vector_col])} 
     
-    return min_and_max_13c_entries
+    return min_and_max_lab_entries
 
 def retrieve_file_paths(peak_heights: pd.DataFrame, short_groups: list[str, ...], experiment: str) -> list[str, ...]:
     """Retrieve file paths that correspond with the sample short groups of interest."""
@@ -246,20 +250,25 @@ def plot_file_per_compound_eics(ax, ms1_data, lcmsrun_list, compound_key, colorm
     by_label = dict(zip(labels, handles))
     ax.legend(by_label.values(), by_label.keys(), loc='upper left')
     
-def generate_compound_keys(compound_atlas):
+def generate_compound_keys(compound_atlas: pd.DataFrame) -> list[tuple[str, str], ...]:
+    """Generate compound keys (name and adduct) from Metatlas compound atlas"""
     
     compound_names = compound_atlas['label'].str[:-3].tolist()
+    compound_names = [name.rstrip() for name in compound_names]
+    
     compound_adducts = compound_atlas['adduct'].str[1:-2].tolist()
+    compound_adducts = [adduct.rstrip() for adduct in compound_adducts]
 
     compound_keys = list(set(zip(compound_names, compound_adducts)))
+    compound_keys.sort()
     
     return compound_keys
 
-def get_12c_and_13_groups(short_group_pairs):
-    short_groups_12c = [pair[0] for pair in short_group_pairs]
-    short_groups_13c = [pair[1] for pair in short_group_pairs]
+def get_unlab_and_13_groups(short_group_pairs):
+    short_groups_unlab = [pair[0] for pair in short_group_pairs]
+    short_groups_lab = [pair[1] for pair in short_group_pairs]
     
-    return short_groups_12c, short_groups_13c
+    return short_groups_unlab, short_groups_lab
 
 def collect_sample_ms1_data(compound_atlas, polarity, sample_files):
     
@@ -282,19 +291,19 @@ def collect_sample_ms1_data(compound_atlas, polarity, sample_files):
     return ms1_data
 
 def get_output_path(project_directory, experiment):
-    output_path = os.path.join(project_directory, experiment, "13C_SIL_outputs")
+    output_path = os.path.join(project_directory, experiment, "SIL_outputs")
     
     if not os.path.exists(output_path):
         os.mkdir(output_path)
     
     return output_path
 
-def export_noise_detection_plots(peak_heights, ms1_data, sample_files, short_groups_12c, short_groups_13c, compound_keys, output_path, polarity):
+def export_noise_detection_plots(peak_heights, ms1_data, sample_files, short_groups_unlab, short_groups_lab, compound_keys, output_path, polarity):
     
-    sample_files_12c = [file for file in sample_files if get_file_short_group(file) in short_groups_12c]
-    sample_files_13c = [file for file in sample_files if get_file_short_group(file) in short_groups_13c]
+    sample_files_unlab = [file for file in sample_files if get_file_short_group(file) in short_groups_unlab]
+    sample_files_lab = [file for file in sample_files if get_file_short_group(file) in short_groups_lab]
     
-    peak_heights = peak_heights[peak_heights['short groupname'].isin(short_groups_12c + short_groups_13c)] 
+    peak_heights = peak_heights[peak_heights['short groupname'].isin(short_groups_unlab + short_groups_lab)] 
     compound_columns = [column for column in peak_heights.columns if polarity in column]
 
     plot_path = os.path.join(output_path, 'noise_detection_plots')
@@ -309,30 +318,30 @@ def export_noise_detection_plots(peak_heights, ms1_data, sample_files, short_gro
         fig, ax = plt.subplots(2, 2, sharex='col', gridspec_kw={'width_ratios': [2, 1.5]})
         fig.suptitle('{} {} Noise Detection Plots'.format(compound_name, compound_adduct), fontsize=16)
 
-        plot_file_per_compound_eics(ax[0, 0], ms1_data, sample_files_13c, (compound_name, compound_adduct), "tab20")
-        ax[0, 0].set_title("13C Enriched Sample Signal")
+        plot_file_per_compound_eics(ax[0, 0], ms1_data, sample_files_lab, (compound_name, compound_adduct), "tab20")
+        ax[0, 0].set_title("lab Enriched Sample Signal")
 
-        plot_file_per_compound_eics(ax[1, 0], ms1_data, sample_files_12c, (compound_name, compound_adduct), "tab20")
+        plot_file_per_compound_eics(ax[1, 0], ms1_data, sample_files_unlab, (compound_name, compound_adduct), "tab20")
         ax[1, 0].set_title("Unenriched Sample Signal")
         ax[1, 0].set_xlabel("Retention Time (Minutes)")
 
-        entries_13c_and_12c = get_13c_and_12c_vectors(peak_heights, compound_name, compound_adduct, compound_columns, short_groups_12c, short_groups_13c)
+        entries_lab_and_unlab = get_lab_and_unlab_vectors(peak_heights, compound_name, compound_adduct, compound_columns, short_groups_unlab, short_groups_lab)
 
-        x_labels = np.array(["M{}".format(i) for i in range(len(entries_13c_and_12c['13c'][1]))])
+        x_labels = np.array(["M{}".format(i) for i in range(len(entries_lab_and_unlab['lab'][1]))])
 
-        ax[0, 1].scatter(x_labels, entries_13c_and_12c['13c'][1], alpha=0.8)
+        ax[0, 1].scatter(x_labels, entries_lab_and_unlab['lab'][1], alpha=0.8)
         ax[0, 1].set_yscale('log')
-        ax[0, 1].set_title(entries_13c_and_12c['13c'][0])
+        ax[0, 1].set_title(entries_lab_and_unlab['lab'][0])
 
-        noise_12c_idxs = detect_noise(entries_13c_and_12c['12c'][1])
+        noise_unlab_idxs = detect_noise(entries_lab_and_unlab['unlab'][1])
 
-        ax[1, 1].scatter(x_labels, entries_13c_and_12c['12c'][1], alpha=0.8)
-        ax[1, 1].scatter(x_labels[noise_12c_idxs], entries_13c_and_12c['12c'][1][noise_12c_idxs], c='r', label="Probable Noise", alpha=0.8)
+        ax[1, 1].scatter(x_labels, entries_lab_and_unlab['unlab'][1], alpha=0.8)
+        ax[1, 1].scatter(x_labels[noise_unlab_idxs], entries_lab_and_unlab['unlab'][1][noise_unlab_idxs], c='r', label="Probable Noise", alpha=0.8)
         ax[1, 1].set_yscale('log')
-        ax[1, 1].set_title(entries_13c_and_12c['12c'][0])
+        ax[1, 1].set_title(entries_lab_and_unlab['unlab'][0])
         ax[1, 1].legend()
 
-        ax[1, 1].set_xlabel("Number of 13C Atoms")
+        ax[1, 1].set_xlabel("Number of lab Atoms")
 
         compound_plot_path = os.path.join(plot_path, '{}_{}_noise_detection_plot.png'.format(compound_name, compound_adduct))
 
@@ -370,7 +379,7 @@ def filter_compound_peak_heights(peak_heights, compound_name, compound_adduct, o
             
     peak_heights.drop(columns=remove_cols, inplace=True)
     
-def filter_all_peak_heights(peak_heights, compound_keys, output_path):
+def filter_all_peak_heights(peak_heights: pd.DataFrame, compound_keys: list, output_path):
     pass
 
 def generate_outputs(project_directory: str,
@@ -392,10 +401,10 @@ def generate_outputs(project_directory: str,
     
     compound_keys = generate_compound_keys(compound_atlas)
 
-    short_groups_12c, short_groups_13c = get_12c_and_13_groups(short_group_pairs)
-    sample_files = retrieve_file_paths(peak_heights, short_groups_12c + short_groups_13c, experiment)
+    short_groups_unlab, short_groups_lab = get_unlab_and_13_groups(short_group_pairs)
+    sample_files = retrieve_file_paths(peak_heights, short_groups_unlab + short_groups_lab, experiment)
     
     ms1_data = collect_sample_ms1_data(compound_atlas, polarity, sample_files)
-    compound_data = export_noise_detection_plots(peak_heights, ms1_data, sample_files, short_groups_12c, short_groups_13c, compound_keys, output_path, polarity)
+    compound_data = export_noise_detection_plots(peak_heights, ms1_data, sample_files, short_groups_unlab, short_groups_lab, compound_keys, output_path, polarity)
 
     return compound_data, output_path
