@@ -298,7 +298,8 @@ def get_output_path(project_directory, experiment):
     
     return output_path
 
-def export_noise_detection_plots(peak_heights, ms1_data, sample_files, short_groups_unlab, short_groups_lab, compound_keys, output_path, polarity):
+def export_noise_detection_plots(peak_heights: pd.DataFrame, ms1_data: pd.DataFrame, sample_files: list[str, ...], 
+                                 short_groups_unlab:, short_groups_lab, compound_keys, output_path, polarity):
     
     sample_files_unlab = [file for file in sample_files if get_file_short_group(file) in short_groups_unlab]
     sample_files_lab = [file for file in sample_files if get_file_short_group(file) in short_groups_lab]
@@ -306,7 +307,7 @@ def export_noise_detection_plots(peak_heights, ms1_data, sample_files, short_gro
     peak_heights = peak_heights[peak_heights['short groupname'].isin(short_groups_unlab + short_groups_lab)] 
     compound_columns = [column for column in peak_heights.columns if polarity in column]
 
-    plot_path = os.path.join(output_path, 'noise_detection_plots')
+    plot_path = os.path.join(output_path, '{}_noise_detection_plots'.format(polarity))
 
     if not os.path.exists(plot_path):
         os.mkdir(plot_path)
@@ -354,10 +355,9 @@ def export_noise_detection_plots(peak_heights, ms1_data, sample_files, short_gro
         
     return noise_detection_data
 
-def filter_compound_peak_heights(peak_heights, compound_name, compound_adduct, output_path):
-    
-    gui_selection_data_path = os.path.join(output_path, "gui_selection_data.csv")
-    gui_selection_data = pd.read_csv(gui_selection_data_path)
+def filter_compound_peak_heights(gui_selection_data: pd.DataFrame, peak_heights: pd.DataFrame, 
+                                 compound_name: str, compound_adduct: str, output_path: str, polarity: str) -> None:
+    """Remove columns from peak heights table based on GUI selections for one compound key."""
     
     compound_columns = filter_compound_columns(compound_name, compound_adduct, peak_heights.columns)
     
@@ -379,8 +379,18 @@ def filter_compound_peak_heights(peak_heights, compound_name, compound_adduct, o
             
     peak_heights.drop(columns=remove_cols, inplace=True)
     
-def filter_all_peak_heights(peak_heights: pd.DataFrame, compound_keys: list, output_path):
-    pass
+def filter_and_save_peak_heights(peak_heights: pd.DataFrame, compound_keys: list, output_path: str, polarity: str) -> None:
+    """Filter peak heights using GUI selections and save new peak height data."""
+    
+    gui_selection_data_path = os.path.join(output_path, "{}_gui_selection_data.csv".format(polarity))
+    gui_selection_data = pd.read_csv(gui_selection_data_path)
+    
+    for compound_name, compound_adduct in compound_keys:
+        filter_compound_peak_heights(gui_selection_data, peak_heights, compound_name, compound_adduct, output_path, polarity)
+        
+    filtered_peak_heights_path = os.path.join(output_path, "{}_filtered_peak_heights.csv".format(polarity))
+    peak_heights.to_csv(filtered_peak_heights_path)
+    
 
 def generate_outputs(project_directory: str,
                      experiment: str,
@@ -407,4 +417,4 @@ def generate_outputs(project_directory: str,
     ms1_data = collect_sample_ms1_data(compound_atlas, polarity, sample_files)
     compound_data = export_noise_detection_plots(peak_heights, ms1_data, sample_files, short_groups_unlab, short_groups_lab, compound_keys, output_path, polarity)
 
-    return compound_data, output_path
+    return peak_heights, compound_data, compound_keys, output_path

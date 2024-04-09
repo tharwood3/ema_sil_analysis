@@ -4,10 +4,11 @@ import pandas as pd
 import os
 
 class Dashboard():
-    def __init__(self, compound_data, output_path, compound_idx=0, plot_size=(1200, 800)):
+    def __init__(self, compound_data, output_path, polarity, compound_idx=0, plot_size=(1200, 800)):
         
         self.compound_data = compound_data
         self.compound_idx = compound_idx
+        self.polarity = polarity
         self.plot_size = plot_size
         self.output_path = output_path
         
@@ -104,7 +105,7 @@ class Dashboard():
         compound_data_df = pd.DataFrame(self.compound_data)
         compound_data_df['remove_entry'] = compound_data_df['remove_m_signals'].apply(lambda x: True if "Remove All" in x else False)
         
-        compound_data_df.to_csv(os.path.join(self.output_path, "gui_selection_data.csv"))
+        compound_data_df.to_csv(os.path.join(self.output_path, "{}_gui_selection_data.csv".format(self.polarity)))
 
     def on_previous_button_clicked(self, b):
         self._update_signals_to_remove()
