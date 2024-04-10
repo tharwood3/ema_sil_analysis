@@ -75,12 +75,12 @@ def make_labeled_atlas(unlabeled_atlas: pd.DataFrame, labeled_atom: str, mz_tole
 
 def generate_atlas_file(project_directory: str, experiment: str, polarity: str,
                         workflow_name: str, rt_alignment_number: int, analysis_number: int,
-                        labeled_atom: str, mz_tolerance: int, csv_atlas_file_name: str) -> str:
+                        labeled_atom: str, mz_tolerance: int, csv_atlas_file_name: str, user: str | None = None) -> str:
     """Generates and saves isotopically labeled version of a given compound atlas for labeled atom of interest."""
     
     assert labeled_atom in ISOTOPE_DIFF_MASSES.keys()
     
-    compound_atlas = read_compound_atlas(project_directory, experiment, polarity, workflow_name, rt_alignment_number, analysis_number)
+    compound_atlas = read_compound_atlas(project_directory, experiment, polarity, workflow_name, rt_alignment_number, analysis_number, user)
     labeled_atlas = make_labeled_atlas(compound_atlas, labeled_atom, mz_tolerance)
     
     output_path = get_output_path(project_directory, experiment)

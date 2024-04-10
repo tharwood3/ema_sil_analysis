@@ -39,7 +39,7 @@ def _format_peak_heights(peak_heights: pd.DataFrame) -> pd.DataFrame:
     return peak_heights
 
 def read_peak_heights(project_directory: str, experiment: str, polarity: str, 
-                      workflow_name: str, rt_alignment_number: int, analysis_number: int) -> pd.DataFrame:
+                      workflow_name: str, rt_alignment_number: int, analysis_number: int, user: str | None = None) -> pd.DataFrame:
     """Read peak heights csv file created from Metatlas Targeted workflow."""
     
     assert polarity == "positive" or polarity == "negative"
@@ -65,7 +65,7 @@ def read_peak_heights(project_directory: str, experiment: str, polarity: str,
 
 
 def read_compound_atlas(project_directory: str, experiment: str, polarity: str,
-                        workflow_name: str, rt_alignment_number: int, analysis_number: int) -> pd.DataFrame:
+                        workflow_name: str, rt_alignment_number: int, analysis_number: int, user: str | None = None) -> pd.DataFrame:
     """Read compound atlas csv file created from Metatlas Targeted workflow"""
     
     assert polarity == "positive" or polarity == "negative"
@@ -74,13 +74,20 @@ def read_compound_atlas(project_directory: str, experiment: str, polarity: str,
         short_pol = "POS"
     if polarity == "negative":
         short_pol = "NEG"
+        
+    if user is None:
+        user = getpass.getuser()
     
-    experiment_output_dir = "{}_{}_{}_{}".format(getpass.getuser(), workflow_name, rt_alignment_number, analysis_number)
+    experiment_output_dir = "{}_{}_{}_{}".format(user, workflow_name, rt_alignment_number, analysis_number)
     targeted_output_dir = "{}_{}".format(workflow_name, experiment)
     ema_output_dir = "EMA-{}".format(short_pol)
     
     output_dir = os.path.join(project_directory, experiment, experiment_output_dir, "Targeted", targeted_output_dir, ema_output_dir)
-    compound_atlas_path = [atlas_file for atlas_file in glob.glob(os.path.join(output_dir, "CompoundAtlas_*.csv"))][0]
+    
+    try:
+        compound_atlas_path = [atlas_file for atlas_file in glob.glob(os.path.join(output_dir, "CompoundAtlas_*.csv"))][0]
+    except:
+        print("No atlas not found in: {}".format(output_dir))
     
     compound_atlas = pd.read_csv(compound_atlas_path, index_col=0)
     
@@ -299,7 +306,7 @@ def get_output_path(project_directory, experiment):
     return output_path
 
 def export_noise_detection_plots(peak_heights: pd.DataFrame, ms1_data: pd.DataFrame, sample_files: list[str, ...], 
-                                 short_groups_unlab:, short_groups_lab, compound_keys, output_path, polarity):
+                                 short_groups_unlab, short_groups_lab, compound_keys, output_path, polarity):
     
     sample_files_unlab = [file for file in sample_files if get_file_short_group(file) in short_groups_unlab]
     sample_files_lab = [file for file in sample_files if get_file_short_group(file) in short_groups_lab]
@@ -398,7 +405,8 @@ def generate_outputs(project_directory: str,
                      workflow_name: str,
                      rt_alignment_number: int,
                      analysis_number: int,
-                     short_group_pairs: list[tuple[str, str]]):
+                     short_group_pairs: list[tuple[str, str]],
+                     user: str | None = None):
     """Generate noise detection plots and collect data.
     
     Output is used in the noise detection GUI.
@@ -406,8 +414,8 @@ def generate_outputs(project_directory: str,
     
     output_path = get_output_path(project_directory, experiment)
     
-    peak_heights = read_peak_heights(project_directory, experiment, polarity, workflow_name, rt_alignment_number, analysis_number)
-    compound_atlas = read_compound_atlas(project_directory, experiment, polarity, workflow_name, rt_alignment_number, analysis_number)
+    peak_heights = read_peak_heights(project_directory, experiment, polarity, workflow_name, rt_alignment_number, analysis_number, user=user)
+    compound_atlas = read_compound_atlas(project_directory, experiment, polarity, workflow_name, rt_alignment_number, analysis_number, user=user)
     
     compound_keys = generate_compound_keys(compound_atlas)
 
