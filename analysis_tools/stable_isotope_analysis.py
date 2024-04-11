@@ -160,6 +160,7 @@ def filter_compound_columns(compound_name: str, compound_adduct: str, compound_c
         compound_name_columns = [column for column in compound_name_columns if "H" not in column.split("_")[-2]]
     if compound_adduct == "M+H" or compound_adduct == "M-H":
         compound_name_columns = [column for column in compound_name_columns if "M" in column.split("_")[-2][0]]
+        compound_name_columns = [column for column in compound_name_columns if "H2O" not in column.split("_")[-2]]
         
     return compound_name_columns
 
