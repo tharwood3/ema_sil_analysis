@@ -227,8 +227,8 @@ def plot_eic(ax, ms1_data, lcmsrun, label, color):
     x = xy['rt']
     y = xy['i']
 
-    ax.ticklabel_format(axis='y', style='sci', scilimits=(0,0))
     ax.plot(x, y, alpha=0.6, linewidth=0.8, color=color, label=label.split(" ")[-2])
+    ax.set_yscale('log')
     
 def plot_file_eics(ax, ms1_data, lcmsrun_list, label, color):
     
