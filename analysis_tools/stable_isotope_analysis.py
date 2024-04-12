@@ -272,7 +272,7 @@ def generate_compound_keys(compound_atlas: pd.DataFrame) -> list[tuple[str, str]
     
     return compound_keys
 
-def get_unlab_and_13_groups(short_group_pairs):
+def get_unlab_and_lab_groups(short_group_pairs):
     short_groups_unlab = [pair[0] for pair in short_group_pairs]
     short_groups_lab = [pair[1] for pair in short_group_pairs]
     
@@ -372,18 +372,22 @@ def filter_compound_peak_heights(gui_selection_data: pd.DataFrame, peak_heights:
     signals_to_remove = gui_selection_data[(gui_selection_data['compound_name'] == compound_name) &
                                            (gui_selection_data['compound_adduct'] == compound_adduct)]['remove_m_signals'].values[0]
     
-    col_pats = []
-    for signal in eval(signals_to_remove):
-        c13_num = signal.split("Remove ")[1]
-        col_pats.append(c13_num)
-        
-    remove_cols = []
-    for col in compound_columns:
-        if col.split("_")[-4] in col_pats:
-            remove_cols.append(col)
+    if 'Remove All' in eval(signals_to_remove):
+        remove_cols = compound_columns
+    else:
+        col_pats = []
+        for signal in eval(signals_to_remove):
+            c13_num = signal.split("Remove ")[1]
+            col_pats.append(c13_num)
+
+        remove_cols = []
+        for col in compound_columns:
+            if col.split("_")[-4] in col_pats:
+                remove_cols.append(col)
             
     if len(remove_cols) == 0:
         return
+    
             
     peak_heights.drop(columns=remove_cols, inplace=True)
     
@@ -420,7 +424,7 @@ def generate_outputs(project_directory: str,
     
     compound_keys = generate_compound_keys(compound_atlas)
 
-    short_groups_unlab, short_groups_lab = get_unlab_and_13_groups(short_group_pairs)
+    short_groups_unlab, short_groups_lab = get_unlab_and_lab_groups(short_group_pairs)
     sample_files = retrieve_file_paths(peak_heights, short_groups_unlab + short_groups_lab, experiment)
     
     ms1_data = collect_sample_ms1_data(compound_atlas, polarity, sample_files)
