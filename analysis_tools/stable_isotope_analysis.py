@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import numpy.typing as npt
 import os
 import re
 import math
@@ -93,7 +94,7 @@ def read_compound_atlas(project_directory: str, experiment: str, polarity: str,
     
     return compound_atlas
 
-def detect_noise(compound_intensities: np.ndarray[float, ...], expected_isotopic_ratio=0.01, max_percent_difference=100) -> list[int, ...]:
+def detect_noise(compound_intensities: npt.NDArray[float], expected_isotopic_ratio=0.01, max_percent_difference=100) -> list[int]:
     """Return indicies of intensity vector that differ from expected natural abundance patterns.
     
     Noise is determined by comparing the actual intensity to the expected intensity given the natural abundance of the isotope.
@@ -133,7 +134,7 @@ def convert_name_to_metatlas(compound_name: str) -> str:
     
     return compound_name
 
-def make_intensity_vector(df_row: pd.core.series.Series) -> np.ndarray[float, ...]:
+def make_intensity_vector(df_row: pd.core.series.Series) -> npt.NDArray[float]:
     """Return an array of values given a row of a pandas DataFrame."""
     
     intensity_vector = [float(i) for i in df_row]
@@ -141,14 +142,14 @@ def make_intensity_vector(df_row: pd.core.series.Series) -> np.ndarray[float, ..
     
     return intensity_vector 
 
-def get_lab_intensity_sum(intensity_vector: np.ndarray[float, ...]) -> float:
+def get_lab_intensity_sum(intensity_vector: npt.NDArray[float]) -> float:
     """Get sum of intensity vector, excluding the unlabeled molecule."""
     
     intensity_sum_lab = intensity_vector[1:].sum()
     
     return intensity_sum_lab
 
-def filter_compound_columns(compound_name: str, compound_adduct: str, compound_columns: list[str, ...]) -> list[str, ...]:
+def filter_compound_columns(compound_name: str, compound_adduct: str, compound_columns: list[str]) -> list[str]:
     """Filter DataFrame columns by compound name and adduct."""
     
     metatlas_compound_name = convert_name_to_metatlas(compound_name)
@@ -165,7 +166,7 @@ def filter_compound_columns(compound_name: str, compound_adduct: str, compound_c
     return compound_name_columns
 
 def get_lab_and_unlab_vectors(peak_heights: pd.DataFrame, compound_name: str, compound_adduct: str, 
-                            compound_columns: list[str, ...], short_groups_unlab: list[str, ...], short_groups_lab: list[str, ...]) -> dict[str, tuple[str, np.ndarray[float, ...]]]:
+                            compound_columns: list[str], short_groups_unlab: list[str], short_groups_lab: list[str]) -> dict[str, tuple[str, npt.NDArray[float]]]:
     """Get the intensity vectors for the top unlabeled and lab labeled files with the highest lab signal."""
     
     compound_name_columns = filter_compound_columns(compound_name, compound_adduct, compound_columns)
@@ -190,7 +191,7 @@ def get_lab_and_unlab_vectors(peak_heights: pd.DataFrame, compound_name: str, co
     
     return min_and_max_lab_entries
 
-def retrieve_file_paths(peak_heights: pd.DataFrame, short_groups: list[str, ...], experiment: str) -> list[str, ...]:
+def retrieve_file_paths(peak_heights: pd.DataFrame, short_groups: list[str], experiment: str) -> list[str]:
     """Retrieve file paths that correspond with the sample short groups of interest."""
     
     all_file_paths = glob.glob(os.path.join("/global/cfs/cdirs/metatlas/raw_data/*/", experiment, "*.h5"))
@@ -258,7 +259,7 @@ def plot_file_per_compound_eics(ax, ms1_data, lcmsrun_list, compound_key, colorm
     by_label = dict(zip(labels, handles))
     ax.legend(by_label.values(), by_label.keys(), loc='upper left')
     
-def generate_compound_keys(compound_atlas: pd.DataFrame) -> list[tuple[str, str], ...]:
+def generate_compound_keys(compound_atlas: pd.DataFrame) -> list[tuple[str, str]]:
     """Generate compound keys (name and adduct) from Metatlas compound atlas"""
     
     compound_names = compound_atlas['label'].str[:-3].tolist()
@@ -306,7 +307,7 @@ def get_output_path(project_directory, experiment):
     
     return output_path
 
-def export_noise_detection_plots(peak_heights: pd.DataFrame, ms1_data: pd.DataFrame, sample_files: list[str, ...], 
+def export_noise_detection_plots(peak_heights: pd.DataFrame, ms1_data: pd.DataFrame, sample_files: list[str], 
                                  short_groups_unlab, short_groups_lab, compound_keys, output_path, polarity):
     
     sample_files_unlab = [file for file in sample_files if get_file_short_group(file) in short_groups_unlab]
@@ -391,7 +392,7 @@ def filter_compound_peak_heights(gui_selection_data: pd.DataFrame, peak_heights:
             
     peak_heights.drop(columns=remove_cols, inplace=True)
     
-def filter_and_save_peak_heights(peak_heights: pd.DataFrame, compound_keys: list[tuple[str, str], ...], output_path: str, polarity: str) -> str:
+def filter_and_save_peak_heights(peak_heights: pd.DataFrame, compound_keys: list[tuple[str, str]], output_path: str, polarity: str) -> str:
     """Filter peak heights using GUI selections and save new peak height data."""
     
     gui_selection_data_path = os.path.join(output_path, "{}_gui_selection_data.csv".format(polarity))
@@ -405,7 +406,7 @@ def filter_and_save_peak_heights(peak_heights: pd.DataFrame, compound_keys: list
     
     return filtered_peak_heights_path
     
-def quanitfy_labeling(filtered_peak_heights: str, short_group_pairs: list[tuple[str, str], ...], compound_keys: list[tuple[str, str], ...]):
+def quanitfy_labeling(filtered_peak_heights: str, short_group_pairs: list[tuple[str, str]], compound_keys: list[tuple[str, str]]):
     
     meta_data_cols = filtered_peak_heights.iloc[:,:6].columns
 
@@ -512,7 +513,7 @@ def generate_outputs(project_directory: str,
 
     return peak_heights, compound_data, compound_keys, output_path
 
-def post_annotation(peak_heights: pd.DataFrame, compound_keys: list[tuple[str, str], ...], output_path: str, polarity: str):
+def post_annotation(peak_heights: pd.DataFrame, compound_keys: list[tuple[str, str]], output_path: str, polarity: str):
     
     filtered_peak_heights_path = filter_and_save_peak_heights(peak_heights, compound_keys, output_path, polarity)
     
