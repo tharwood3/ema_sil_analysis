@@ -391,7 +391,7 @@ def filter_compound_peak_heights(gui_selection_data: pd.DataFrame, peak_heights:
             
     peak_heights.drop(columns=remove_cols, inplace=True)
     
-def filter_and_save_peak_heights(peak_heights: pd.DataFrame, compound_keys: list, output_path: str, polarity: str) -> None:
+def filter_and_save_peak_heights(peak_heights: pd.DataFrame, compound_keys: list[tuple[str, str], ...], output_path: str, polarity: str) -> str:
     """Filter peak heights using GUI selections and save new peak height data."""
     
     gui_selection_data_path = os.path.join(output_path, "{}_gui_selection_data.csv".format(polarity))
@@ -402,6 +402,86 @@ def filter_and_save_peak_heights(peak_heights: pd.DataFrame, compound_keys: list
         
     filtered_peak_heights_path = os.path.join(output_path, "{}_filtered_peak_heights.csv".format(polarity))
     peak_heights.to_csv(filtered_peak_heights_path)
+    
+    return filtered_peak_heights_path
+    
+def quanitfy_labeling(filtered_peak_heights: str, short_group_pairs: list[tuple[str, str], ...], compound_keys: list[tuple[str, str], ...]):
+    
+    meta_data_cols = filtered_peak_heights.iloc[:,:6].columns
+
+    labeling_quant = []
+    labeling_quant_extra = []
+    for unlab_group, lab_group in short_group_pairs:
+
+        all_signal = filtered_peak_heights[filtered_peak_heights['short groupname'].isin([unlab_group, lab_group])]
+        unlab_signal = filtered_peak_heights[filtered_peak_heights['short groupname']==unlab_group]
+
+        quant_data = all_signal[meta_data_cols].copy()
+        quant_data_extra = all_signal[meta_data_cols].copy()
+
+        for compound_name, compound_adduct in compound_keys:
+
+            formula = get_formula_from_name(compound_atlas, compound_name)
+            labeled_atom_count = count_element_from_formula(formula, labeled_atom)
+            compound_cols = filter_compound_columns(compound_name, compound_adduct, all_signal.columns)
+
+            if len(compound_cols) == 0:
+                continue
+
+            isotope_range = [int(col.split('_')[-4][1:]) for col in compound_cols]
+            m0_col = compound_cols[0]
+
+            # all signal normalized by the unlabeled isotopologue (M0)
+            all_normalized_signal = all_signal[compound_cols].div(all_signal[m0_col], axis=0)
+            all_normalized_signal_sum = all_normalized_signal.sum(axis=1)
+
+            # unlabeled signal normalized by the unlabeled isotopologue (M0)
+            unlab_normalized_signal = unlab_signal[compound_cols].div(unlab_signal[m0_col], axis=0)
+            unlab_normalized_signal_mean = unlab_normalized_signal.mean()
+
+            # all M0 normalized signal with corresponding natural isotopic abundance subtracted
+            all_extra_normalized_signal = all_normalized_signal - unlab_normalized_signal_mean
+            all_extra_normalized_signal[all_extra_normalized_signal < 0] = 0
+            all_extra_normalized_signal_sum = all_extra_normalized_signal.sum(axis=1)
+
+            # all M0 normalized signal, adjusted by total number of targeted atoms in molecule
+            all_atom_normalized_signal = all_normalized_signal.mul(labeled_atom_count)
+            all_atom_normalized_signal_sum = all_atom_normalized_signal.sum(axis=1)
+
+            # all M0 normalized signal with corresponding natural isotopic abundance subtracted, adjusted by number of labeled targeted atom
+            all_extra_range_normalized_signal = all_extra_normalized_signal.mul(isotope_range)
+            all_extra_range_normalized_signal_sum = all_extra_range_normalized_signal.sum(axis=1)
+
+            # all M0 normalized signal with corresponding natural isotopic abundance subtracted, adjusted by the total number of targeted atoms in molecule
+            all_extra_atom_normalized_signal = all_extra_normalized_signal.mul(labeled_atom_count)
+            all_extra_atom_normalized_signal_sum = all_extra_atom_normalized_signal.sum(axis=1)
+
+            # final labeling calculations
+            # percentage of 13C atoms above natural abundance
+            quant_data['{}_{}_percent_labeling'.format(compound_name, compound_adduct)] = all_extra_range_normalized_signal_sum / all_atom_normalized_signal_sum
+            # percentage of molecules with 13C above natural abundance
+            quant_data['{}_{}_percent_of_labeled_molecules'.format(compound_name, compound_adduct)] = all_extra_normalized_signal_sum / all_normalized_signal_sum
+            # how labeled the labeled molecules are
+            quant_data['{}_{}_percent_labeling_of_labeled_molecules'.format(compound_name, compound_adduct)] = all_extra_range_normalized_signal_sum / all_extra_atom_normalized_signal_sum
+            # total signal of all isotopologues
+            quant_data['{}_{}_total_intensity'.format(compound_name, compound_adduct)] = all_signal[compound_cols].sum(axis = 1)
+            # total signal of labeled isotopologues
+            quant_data['{}_{}_total_labeled_intensity'.format(compound_name, compound_adduct)] = all_signal[compound_cols[1:]].sum(axis = 1)
+            # compound formula
+            quant_data['{}_{}_formula'.format(compound_name, compound_adduct)] = formula
+
+            # intermediate values
+            quant_data_extra['{}_{}_normalized_signal_sum'.format(compound_name, compound_adduct)] = all_normalized_signal_sum
+            quant_data_extra['{}_{}_normalized_atom-adjusted_signal_sum'.format(compound_name, compound_adduct)] = all_atom_normalized_signal_sum
+            quant_data_extra['{}_{}_normalized_labeled_signal_sum'.format(compound_name, compound_adduct)]  = all_extra_normalized_signal_sum
+            quant_data_extra['{}_{}_normalized_labeled_isotopic-range-adjusted_signal_sum'.format(compound_name, compound_adduct)] = all_extra_atom_normalized_signal_sum
+            quant_data_extra['{}_{}_normalized_labeled_isotopic-range-adjusted_signal_sum'.format(compound_name, compound_adduct)] = all_extra_range_normalized_signal_sum
+
+        labeling_quant.append(quant_data)
+        labeling_quant_extra.append(quant_data_extra)
+
+    labeling_quant = pd.concat(labeling_quant)
+    labeling_quant_extra = pd.concat(labeling_quant_extra)
     
 
 def generate_outputs(project_directory: str,
@@ -431,3 +511,8 @@ def generate_outputs(project_directory: str,
     compound_data = export_noise_detection_plots(peak_heights, ms1_data, sample_files, short_groups_unlab, short_groups_lab, compound_keys, output_path, polarity)
 
     return peak_heights, compound_data, compound_keys, output_path
+
+def post_annotation(peak_heights: pd.DataFrame, compound_keys: list[tuple[str, str], ...], output_path: str, polarity: str):
+    
+    filtered_peak_heights_path = filter_and_save_peak_heights(peak_heights, compound_keys, output_path, polarity)
+    
