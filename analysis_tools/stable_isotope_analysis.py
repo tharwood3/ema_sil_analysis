@@ -24,6 +24,7 @@ simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
 CONTROLLED_VOCAB = ['InjBL', 'InjBl', 'blank', 'Blank', 'QC', 'ISTD']
 
+
 def _format_peak_heights(peak_heights: pd.DataFrame) -> pd.DataFrame:
     """Reformate the peak heights table for further manipulation.
     
@@ -38,6 +39,7 @@ def _format_peak_heights(peak_heights: pd.DataFrame) -> pd.DataFrame:
     peak_heights.iloc[:, 6:] = peak_heights.iloc[:, 6:].astype(float)
     
     return peak_heights
+
 
 def read_peak_heights(project_directory: str, experiment: str, polarity: str, 
                       workflow_name: str, rt_alignment_number: int, analysis_number: int, user: str | None = None) -> pd.DataFrame:
@@ -94,6 +96,7 @@ def read_compound_atlas(project_directory: str, experiment: str, polarity: str,
     
     return compound_atlas
 
+
 def detect_noise(compound_intensities: npt.NDArray[float], expected_isotopic_ratio=0.01, max_percent_difference=100) -> list[int]:
     """Return indicies of intensity vector that differ from expected natural abundance patterns.
     
@@ -134,6 +137,7 @@ def convert_name_to_metatlas(compound_name: str) -> str:
     
     return compound_name
 
+
 def make_intensity_vector(df_row: pd.core.series.Series) -> npt.NDArray[float]:
     """Return an array of values given a row of a pandas DataFrame."""
     
@@ -142,12 +146,14 @@ def make_intensity_vector(df_row: pd.core.series.Series) -> npt.NDArray[float]:
     
     return intensity_vector 
 
+
 def get_lab_intensity_sum(intensity_vector: npt.NDArray[float]) -> float:
     """Get sum of intensity vector, excluding the unlabeled molecule."""
     
     intensity_sum_lab = intensity_vector[1:].sum()
     
     return intensity_sum_lab
+
 
 def filter_compound_columns(compound_name: str, compound_adduct: str, compound_columns: list[str]) -> list[str]:
     """Filter DataFrame columns by compound name and adduct."""
@@ -164,6 +170,7 @@ def filter_compound_columns(compound_name: str, compound_adduct: str, compound_c
         compound_name_columns = [column for column in compound_name_columns if "H2O" not in column.split("_")[-2]]
         
     return compound_name_columns
+
 
 def get_lab_and_unlab_vectors(peak_heights: pd.DataFrame, compound_name: str, compound_adduct: str, 
                             compound_columns: list[str], short_groups_unlab: list[str], short_groups_lab: list[str]) -> dict[str, tuple[str, npt.NDArray[float]]]:
@@ -185,11 +192,15 @@ def get_lab_and_unlab_vectors(peak_heights: pd.DataFrame, compound_name: str, co
     # get the intensity vectors of the highest and lowest lab sum rows
     highest_unlab_entry = peak_heights[peak_heights['short groupname'].isin(short_groups_unlab)].sort_values(intensity_sum_lab_col, ascending=False)[['short groupname', intensity_vector_col]].iloc[0]
     highest_lab_entry = peak_heights[peak_heights['short groupname'].isin(short_groups_lab)].sort_values(intensity_sum_lab_col, ascending=False)[['short groupname', intensity_vector_col]].iloc[0]
+    
+    highest_unlab_vector = np.nan_to_num(highest_unlab_entry[intensity_vector_col])
+    highest_lab_vector = np.nan_to_num(highest_lab_entry[intensity_vector_col])
 
-    min_and_max_lab_entries = {'lab':(highest_lab_entry['short groupname'], highest_lab_entry[intensity_vector_col]),
-                               'unlab':(highest_unlab_entry['short groupname'], highest_unlab_entry[intensity_vector_col])} 
+    min_and_max_lab_entries = {'lab':(highest_lab_entry['short groupname'], highest_lab_vector),
+                               'unlab':(highest_unlab_entry['short groupname'], highest_unlab_vector)} 
     
     return min_and_max_lab_entries
+
 
 def retrieve_file_paths(peak_heights: pd.DataFrame, short_groups: list[str], experiment: str) -> list[str]:
     """Retrieve file paths that correspond with the sample short groups of interest."""
@@ -200,6 +211,7 @@ def retrieve_file_paths(peak_heights: pd.DataFrame, short_groups: list[str], exp
     
     return filtered_file_paths
 
+
 def get_file_short_group(file_path: str) -> str:
     """Convert the file path back into the short group name."""
     
@@ -209,6 +221,7 @@ def get_file_short_group(file_path: str) -> str:
     group = file_basename.split("_")[12]
     
     return "_".join([pol, group])
+
 
 def get_hex_colors(colormap, n):
     
@@ -221,6 +234,7 @@ def get_hex_colors(colormap, n):
         
     return hex_colors
 
+
 def plot_eic(ax, ms1_data, lcmsrun, label, color):
     
     xy = ms1_data[(ms1_data['lcmsrun_observed'] == lcmsrun) & 
@@ -232,10 +246,12 @@ def plot_eic(ax, ms1_data, lcmsrun, label, color):
     ax.plot(x, y, alpha=0.6, linewidth=0.8, color=color, label=label.split(" ")[-2])
     ax.set_yscale('log')
     
+    
 def plot_file_eics(ax, ms1_data, lcmsrun_list, label, color):
     
     for lcmsrun in lcmsrun_list:
         plot_eic(ax, ms1_data, lcmsrun, label, color)
+        
     
 def plot_file_per_compound_eics(ax, ms1_data, lcmsrun_list, compound_key, colormap):
     
@@ -259,6 +275,7 @@ def plot_file_per_compound_eics(ax, ms1_data, lcmsrun_list, compound_key, colorm
     by_label = dict(zip(labels, handles))
     ax.legend(by_label.values(), by_label.keys(), loc='upper left')
     
+    
 def generate_compound_keys(compound_atlas: pd.DataFrame) -> list[tuple[str, str]]:
     """Generate compound keys (name and adduct) from Metatlas compound atlas"""
     
@@ -273,11 +290,13 @@ def generate_compound_keys(compound_atlas: pd.DataFrame) -> list[tuple[str, str]
     
     return compound_keys
 
+
 def get_unlab_and_lab_groups(short_group_pairs):
     short_groups_unlab = [pair[0] for pair in short_group_pairs]
     short_groups_lab = [pair[1] for pair in short_group_pairs]
     
     return short_groups_unlab, short_groups_lab
+
 
 def collect_sample_ms1_data(compound_atlas, polarity, sample_files):
     
@@ -299,6 +318,7 @@ def collect_sample_ms1_data(compound_atlas, polarity, sample_files):
     
     return ms1_data
 
+
 def get_output_path(project_directory, experiment):
     output_path = os.path.join(project_directory, experiment, "SIL_outputs")
     
@@ -306,6 +326,7 @@ def get_output_path(project_directory, experiment):
         os.mkdir(output_path)
     
     return output_path
+
 
 def export_noise_detection_plots(peak_heights: pd.DataFrame, ms1_data: pd.DataFrame, sample_files: list[str], 
                                  short_groups_unlab, short_groups_lab, compound_keys, output_path, polarity):
@@ -329,7 +350,7 @@ def export_noise_detection_plots(peak_heights: pd.DataFrame, ms1_data: pd.DataFr
         fig.suptitle('{} {} Noise Detection Plots'.format(compound_name, compound_adduct), fontsize=16)
 
         plot_file_per_compound_eics(ax[0, 0], ms1_data, sample_files_lab, (compound_name, compound_adduct), "tab20")
-        ax[0, 0].set_title("lab Enriched Sample Signal")
+        ax[0, 0].set_title("Stable Isotope Enriched Sample Signal")
 
         plot_file_per_compound_eics(ax[1, 0], ms1_data, sample_files_unlab, (compound_name, compound_adduct), "tab20")
         ax[1, 0].set_title("Unenriched Sample Signal")
@@ -354,7 +375,7 @@ def export_noise_detection_plots(peak_heights: pd.DataFrame, ms1_data: pd.DataFr
         ax[1, 1].set_xlabel("Number of lab Atoms")
 
         compound_plot_path = os.path.join(plot_path, '{}_{}_noise_detection_plot.png'.format(compound_name, compound_adduct))
-
+        
         fig.set_size_inches(14, 8)
         fig.savefig(compound_plot_path)
         plt.close(fig)
@@ -363,6 +384,7 @@ def export_noise_detection_plots(peak_heights: pd.DataFrame, ms1_data: pd.DataFr
                                      'plot_path':compound_plot_path, 'remove_entry':False, 'remove_m_signals':[], 'all_m_signals':list(x_labels)})
         
     return noise_detection_data
+
 
 def filter_compound_peak_heights(gui_selection_data: pd.DataFrame, peak_heights: pd.DataFrame, 
                                  compound_name: str, compound_adduct: str, output_path: str, polarity: str) -> None:
@@ -392,6 +414,7 @@ def filter_compound_peak_heights(gui_selection_data: pd.DataFrame, peak_heights:
             
     peak_heights.drop(columns=remove_cols, inplace=True)
     
+    
 def filter_and_save_peak_heights(peak_heights: pd.DataFrame, compound_keys: list[tuple[str, str]], output_path: str, polarity: str) -> str:
     """Filter peak heights using GUI selections and save new peak height data."""
     
@@ -405,8 +428,14 @@ def filter_and_save_peak_heights(peak_heights: pd.DataFrame, compound_keys: list
     peak_heights.to_csv(filtered_peak_heights_path)
     
     return filtered_peak_heights_path
+
+
+def get_formula_from_name(compound_atlas: pd.DataFrame, compound_name: str) -> str:
+    formula = compound_atlas[compound_atlas.label=='{} M0'.format(compound_name)].formula.values[0]
+    return formula
+
     
-def quanitfy_labeling(filtered_peak_heights: str, short_group_pairs: list[tuple[str, str]], compound_keys: list[tuple[str, str]]):
+def quanitfy_labeling(filtered_peak_heights: pd.DataFrame, compound_atlas: pd.DataFrame, short_group_pairs: list[tuple[str, str]], compound_keys: list[tuple[str, str]]):
     
     meta_data_cols = filtered_peak_heights.iloc[:,:6].columns
 
@@ -484,6 +513,15 @@ def quanitfy_labeling(filtered_peak_heights: str, short_group_pairs: list[tuple[
     labeling_quant = pd.concat(labeling_quant)
     labeling_quant_extra = pd.concat(labeling_quant_extra)
     
+    return labeling_quant, labeling_quant_extra
+
+
+def write_quant_excel_output(output_path: str, polarity: str, labeling_quant: pd.DataFrame, labeling_quant_extra: pd.DataFrame) -> None:
+    
+    with pd.ExcelWriter(os.path.join(output_path, '{}_filtered_peak_heights_quant.xlsx'.format(polarity))) as writer:
+        labeling_quant.to_excel(writer, sheet_name="Final Enrichment Calculations", index=False, header=True)
+        labeling_quant_extra.to_excel(writer, sheet_name="Intermediate Calculations", index=False, header=True)
+    
 
 def generate_outputs(project_directory: str,
                      experiment: str,
@@ -513,7 +551,11 @@ def generate_outputs(project_directory: str,
 
     return peak_heights, compound_data, compound_keys, output_path
 
-def post_annotation(peak_heights: pd.DataFrame, compound_keys: list[tuple[str, str]], output_path: str, polarity: str):
+
+def post_annotation(peak_heights: pd.DataFrame, compound_atlas: pd.DataFrame, compound_keys: list[tuple[str, str]], short_group_pairs: list[tuple[str, str]], output_path: str, polarity: str) -> None:
     
     filtered_peak_heights_path = filter_and_save_peak_heights(peak_heights, compound_keys, output_path, polarity)
+    labeling_quant, labeling_quant_extra = quanitfy_labeling(filtered_peak_heights, compound_atlas, short_group_pairs, compound_keys)
+    
+    write_quant_excel_output(output_path, polarity, labeling_quant, labeling_quant_extra)
     
